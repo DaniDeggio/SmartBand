@@ -1,69 +1,59 @@
-/*!
- * @file SPO2.ino
- * @brief Display heart-rate and SPO2 on serial in real-time, normal SPO2 is within 95~100
- * @n Try to fix the sensor on your finger in using to avoid the effect of pressure change on data output.
- * @n This library supports mainboards: ESP8266, FireBeetle-M0, UNO, ESP32, Leonardo, Mega2560
- * @copyright  Copyright (c) 2010 DFRobot Co.Ltd (http://www.dfrobot.com)
- * @licence     The MIT License (MIT)
- * @author [YeHangYu](hangyu.ye@dfrobot.com)
- * @version  V0.1
- * @date  2020-05-29
- * @url https://github.com/DFRobot/DFRobot_MAX30102
- */
-
 #include <DFRobot_MAX30102.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 
 DFRobot_MAX30102 particleSensor;
+Adafruit_MPU6050 mpu;
 
-/*
-Macro definition options in sensor configuration
-sampleAverage: SAMPLEAVG_1 SAMPLEAVG_2 SAMPLEAVG_4
-               SAMPLEAVG_8 SAMPLEAVG_16 SAMPLEAVG_32
-ledMode:       MODE_REDONLY  MODE_RED_IR  MODE_MULTILED
-sampleRate:    PULSEWIDTH_69 PULSEWIDTH_118 PULSEWIDTH_215 PULSEWIDTH_411
-pulseWidth:    SAMPLERATE_50 SAMPLERATE_100 SAMPLERATE_200 SAMPLERATE_400
-               SAMPLERATE_800 SAMPLERATE_1000 SAMPLERATE_1600 SAMPLERATE_3200
-adcRange:      ADCRANGE_2048 ADCRANGE_4096 ADCRANGE_8192 ADCRANGE_16384
-*/
-void setup()
-{
-  //Init serial
+// Variabili per il MAX30102
+int32_t SPO2; // SPO2
+int8_t SPO2Valid; // Flag per verificare se il calcolo di SPO2 è valido
+int32_t heartRate; // Frequenza cardiaca
+int8_t heartRateValid; // Flag per verificare se il calcolo della frequenza cardiaca è valido
+
+// Variabili per l'MPU6050
+sensors_event_t a, g, temp;
+
+void setup() {
+  // Inizializza la seriale
   Serial.begin(115200);
-  /*!
-   *@brief Init sensor 
-   *@param pWire IIC bus pointer object and construction device, can both pass or not pass parameters (Wire in default)
-   *@param i2cAddr Chip IIC address (0x57 in default)
-   *@return true or false
-   */
+
+  // Imposta il bus I2C con SDA su GPIO5 e SCL su GPIO6
+  Wire.begin(5, 6);
+  
+  // Inizializza il sensore MAX30102
   while (!particleSensor.begin()) {
-    Serial.println("MAX30102 was not found");
+    Serial.println("MAX30102 non trovato");
     delay(1000);
   }
-
-  /*!
-   *@brief Use macro definition to configure sensor 
-   *@param ledBrightness LED brightness, default value: 0x1F（6.4mA), Range: 0~255（0=Off, 255=50mA）
-   *@param sampleAverage Average multiple samples then draw once, reduce data throughput, default 4 samples average
-   *@param ledMode LED mode, default to use red light and IR at the same time 
-   *@param sampleRate Sampling rate, default 400 samples every second 
-   *@param pulseWidth Pulse width: the longer the pulse width, the wider the detection range. Default to be Max range
-   *@param adcRange ADC Measurement Range, default 4096 (nA), 15.63(pA) per LSB
-   */
+  
+  // Configura il MAX30102
   particleSensor.sensorConfiguration(/*ledBrightness=*/50, /*sampleAverage=*/SAMPLEAVG_4, \
                         /*ledMode=*/MODE_MULTILED, /*sampleRate=*/SAMPLERATE_100, \
                         /*pulseWidth=*/PULSEWIDTH_411, /*adcRange=*/ADCRANGE_16384);
+
+  // Inizializza il sensore MPU6050
+  if (!mpu.begin()) {
+    Serial.println("MPU6050 non trovato!");
+    while (1) {
+      delay(10);
+    }
+  }
+  
+  // Configura il MPU6050
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  Serial.println("Sensori inizializzati");
 }
 
-int32_t SPO2; //SPO2
-int8_t SPO2Valid; //Flag to display if SPO2 calculation is valid
-int32_t heartRate; //Heart-rate
-int8_t heartRateValid; //Flag to display if heart-rate calculation is valid 
+void loop() {
+  // Leggi e stampa i dati dal sensore MAX30102
+  Serial.println(F("Attendere circa quattro secondi..."));
+  particleSensor.heartrateAndOxygenSaturation(&SPO2, &SPO2Valid, &heartRate, &heartRateValid);
 
-void loop()
-{
-  Serial.println(F("Wait about four seconds"));
-  particleSensor.heartrateAndOxygenSaturation(/**SPO2=*/&SPO2, /**SPO2Valid=*/&SPO2Valid, /**heartRate=*/&heartRate, /**heartRateValid=*/&heartRateValid);
-  //Print result 
   Serial.print(F("heartRate="));
   Serial.print(heartRate, DEC);
   Serial.print(F(", heartRateValid="));
@@ -72,4 +62,26 @@ void loop()
   Serial.print(SPO2, DEC);
   Serial.print(F(", SPO2Valid="));
   Serial.println(SPO2Valid, DEC);
+
+  // Leggi e stampa i dati dal sensore MPU6050
+  mpu.getEvent(&a, &g, &temp);
+  Serial.print("Accelerometro X: ");
+  Serial.print(a.acceleration.x);
+  Serial.print(", Y: ");
+  Serial.print(a.acceleration.y);
+  Serial.print(", Z: ");
+  Serial.println(a.acceleration.z);
+
+  Serial.print("Giroscopio X: ");
+  Serial.print(g.gyro.x);
+  Serial.print(", Y: ");
+  Serial.print(g.gyro.y);
+  Serial.print(", Z: ");
+  Serial.println(g.gyro.z);
+
+  Serial.print("Temperatura: ");
+  Serial.print(temp.temperature);
+  Serial.println(" C");
+
+  delay(1000); // Pausa tra le letture
 }
