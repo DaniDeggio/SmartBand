@@ -17,7 +17,7 @@ sensors_event_t a, g, temp;
 
 void setup() {
   // Inizializza la seriale
-  Serial.begin(115200);
+  Serial.begin(921600);
 
   // Imposta il bus I2C con SDA su GPIO5 e SCL su GPIO6
   Wire.begin(5, 6);
